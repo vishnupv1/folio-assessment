@@ -1,0 +1,12 @@
+node_modules
+.next
+*.tsbuildinfo
+coverage
+data/*.db
+data/*.db-*
+.env
+.env.local
+*.log
+.DS_Store
+folio-submission.zip
+.walkthrough-audio

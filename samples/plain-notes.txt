@@ -1,0 +1,5 @@
+Standup notes
+
+Talked through the editor toolbar.
+
+No formatting in this file. Folio should still open it as paragraphs.

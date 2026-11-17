@@ -1,0 +1,42 @@
+{
+  "name": "folio",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Folio is a lightweight shared document editor for the Ajaia team.",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start -H 0.0.0.0",
+    "test": "vitest run",
+    "db:reset": "node scripts/reset-db.mjs",
+    "samples": "python3 scripts/make-sample-docx.py"
+  },
+  "dependencies": {
+    "@tiptap/core": "^2.11.5",
+    "@tiptap/extension-placeholder": "^2.11.5",
+    "@tiptap/extension-underline": "^2.11.5",
+    "@tiptap/pm": "^2.11.5",
+    "@tiptap/react": "^2.11.5",
+    "@tiptap/starter-kit": "^2.11.5",
+    "better-sqlite3": "^11.8.1",
+    "linkedom": "^0.18.5",
+    "mammoth": "^1.9.0",
+    "marked": "^15.0.7",
+    "next": "^15.5.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "sanitize-html": "^2.14.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.12",
+    "@types/node": "^22.13.4",
+    "@types/react": "^19.0.8",
+    "@types/react-dom": "^19.0.3",
+    "@types/sanitize-html": "^2.13.0",
+    "typescript": "^5.7.3",
+    "vitest": "^3.0.5"
+  }
+}
