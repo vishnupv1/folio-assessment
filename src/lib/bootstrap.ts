@@ -12,7 +12,9 @@ export function openDatabase(filename: string, options?: { demoDocument?: boolea
 
 export function getDb(): Db {
   if (!globalForDb.folioDb) {
-    const filename = process.env.DATABASE_PATH || path.join(process.cwd(), 'data', 'folio.db')
+    const filename =
+      process.env.DATABASE_PATH ||
+      (process.env.VERCEL ? '/tmp/folio.db' : path.join(process.cwd(), 'data', 'folio.db'))
     globalForDb.folioDb = openDatabase(filename)
   }
   return globalForDb.folioDb

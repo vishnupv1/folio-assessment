@@ -81,7 +81,7 @@ The tests cover the sharing rules, a stale save, import of Markdown and Word, an
 
 ## Deploy
 
-Folio is one Node server and a SQLite file. Do not deploy it to a serverless host. The filesystem there is ephemeral, so documents would disappear.
+Folio is one Node server and a SQLite file. On Vercel the database is `/tmp/folio.db`, because the rest of the filesystem is read-only. That file lasts only as long as the instance, so a saved document can disappear after a cold start. A host with a real disk, such as the Render service below, keeps documents.
 
 Local Docker:
 

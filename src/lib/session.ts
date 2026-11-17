@@ -6,6 +6,7 @@ const DEV_SECRET = 'folio-dev-only-not-for-production'
 export function sessionSecret(): string {
   const fromEnv = process.env.SESSION_SECRET
   if (fromEnv && fromEnv.length >= 16) return fromEnv
+  if (process.env.VERCEL) return 'folio-vercel-demo-secret-01'
   if (process.env.NODE_ENV === 'production') {
     throw new Error('Set SESSION_SECRET to at least 16 characters in production')
   }
