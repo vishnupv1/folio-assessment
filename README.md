@@ -26,7 +26,7 @@ npm run dev
 
 Open http://localhost:3000.
 
-`npm run dev` is the path to use for review. It stores data in `data/folio.db`, which survives refresh and restart.
+`npm run dev` is the path to use for review. Put your connection string in `.env` as `MONGODB_URI`. Documents survive refresh and restart.
 
 Reset the demo documents with:
 
@@ -81,7 +81,7 @@ The tests cover the sharing rules, a stale save, import of Markdown and Word, an
 
 ## Deploy
 
-Folio is one Node server and a SQLite file. On Vercel the database is `/tmp/folio.db`, because the rest of the filesystem is read-only. That file lasts only as long as the instance, so a saved document can disappear after a cold start. A host with a real disk, such as the Render service below, keeps documents.
+Folio stores documents in MongoDB. Set `MONGODB_URI` in `.env` locally and in the Vercel project settings. The same database is what the live site reads.
 
 Local Docker:
 
@@ -90,12 +90,11 @@ docker build -t folio .
 docker run --rm -p 3000:3000 \
   -e SESSION_SECRET=replace-with-at-least-16-characters \
   -e COOKIE_SECURE=false \
-  -e DATABASE_PATH=/data/folio.db \
-  -v folio-data:/data \
+  -e MONGODB_URI \
   folio
 ```
 
-Use `COOKIE_SECURE=true` only when the public URL is HTTPS. `render.yaml` is a starting point for a Render web service with a disk mounted at `/data`.
+Pass your real `MONGODB_URI` into that command. Use `COOKIE_SECURE=true` only when the public URL is HTTPS. `render.yaml` is a starting point for a Render web service; set `MONGODB_URI` there too.
 
 For a local production build over HTTP:
 

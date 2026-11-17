@@ -1,8 +1,7 @@
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterAll, afterEach, describe, expect, it } from 'vitest'
 import { ALEX } from '@/lib/accounts'
-import { openDatabase } from '@/lib/bootstrap'
 import type { Db } from '@/lib/db'
 import { convertHtml } from '@/lib/convert-html'
 import { assertEditorDocument } from '@/lib/editor-extensions'
@@ -16,18 +15,23 @@ import type { PMNode } from '@/lib/types'
 import { getUserByEmail } from '@/lib/users'
 import { MAX_UPLOAD_BYTES } from '@/lib/constants'
 import { getAccessibleDocument } from '@/lib/documents'
+import { stopMemoryServer, testDatabase } from './memory'
 
 const open: Db[] = []
 
-function db() {
-  const database = openDatabase(':memory:', { demoDocument: false })
+async function db() {
+  const database = await testDatabase(false)
   open.push(database)
   return database
 }
 
-afterEach(() => {
-  for (const database of open) database.close()
+afterEach(async () => {
+  for (const database of open) await database.close()
   open.length = 0
+})
+
+afterAll(async () => {
+  await stopMemoryServer()
 })
 
 function typesOf(node: PMNode, acc = new Set<string>()): Set<string> {
@@ -62,11 +66,11 @@ describe('import', () => {
   })
 
   it('keeps headings, lists, and marks from Markdown', async () => {
-    const database = db()
-    const alex = getUserByEmail(database, ALEX.email)!
+    const database = await db()
+    const alex = (await getUserByEmail(database, ALEX.email))!
     const bytes = Buffer.from('# Weekly\n\nA **bold** and *italic* line.\n\n- one\n- two\n')
     const created = await importUploadedFile(database, alex.id, { name: 'weekly-update.md', bytes })
-    const doc = getAccessibleDocument(database, created.id, alex.id)
+    const doc = await getAccessibleDocument(database, created.id, alex.id)
     expect(doc.title).toBe('weekly update')
     expect(typesOf(doc.content).has('heading')).toBe(true)
     expect(typesOf(doc.content).has('bulletList')).toBe(true)
@@ -78,14 +82,14 @@ describe('import', () => {
   })
 
   it('imports the sample files', async () => {
-    const database = db()
-    const alex = getUserByEmail(database, ALEX.email)!
+    const database = await db()
+    const alex = (await getUserByEmail(database, ALEX.email))!
     const markdown = readFileSync(path.join(process.cwd(), 'samples/weekly-update.md'))
     const fromMarkdown = await importUploadedFile(database, alex.id, {
       name: 'weekly-update.md',
       bytes: markdown,
     })
-    const mdDoc = getAccessibleDocument(database, fromMarkdown.id, alex.id)
+    const mdDoc = await getAccessibleDocument(database, fromMarkdown.id, alex.id)
     expect(mdDoc.preview).toContain('sharing')
     expect(hasMark(mdDoc.content, 'underline')).toBe(true)
 
@@ -94,14 +98,14 @@ describe('import', () => {
       name: 'weekly-update.docx',
       bytes: docx,
     })
-    const wordDoc = getAccessibleDocument(database, fromDocx.id, alex.id)
+    const wordDoc = await getAccessibleDocument(database, fromDocx.id, alex.id)
     expect(wordDoc.preview).toContain('Weekly update from Word')
     expect(hasMark(wordDoc.content, 'bold')).toBe(true)
   })
 
   it('rejects an unsupported or oversized file', async () => {
-    const database = db()
-    const alex = getUserByEmail(database, ALEX.email)!
+    const database = await db()
+    const alex = (await getUserByEmail(database, ALEX.email))!
     await expect(
       importUploadedFile(database, alex.id, { name: 'notes.pdf', bytes: Buffer.from('hello') }),
     ).rejects.toMatchObject({ status: 400 })

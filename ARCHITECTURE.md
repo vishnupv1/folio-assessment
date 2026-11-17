@@ -1,6 +1,6 @@
 # Architecture
 
-Folio is one Next.js app. The browser talks to route handlers, those handlers call a document service, and the service writes SQLite. There is no separate frontend API client and no hosted database.
+Folio is one Next.js app. The browser talks to route handlers, those handlers call a document service, and the service writes MongoDB. There is no separate frontend API client.
 
 ```mermaid
 flowchart LR
@@ -8,7 +8,7 @@ flowchart LR
   browser --> routes[Route handlers]
   routes --> service[Document service]
   pages --> service
-  service --> sqlite[(SQLite file)]
+  service --> mongo[(MongoDB)]
   upload[txt, md, or docx] --> sanitize[Sanitize and map to JSON]
   sanitize --> service
 ```
@@ -21,9 +21,9 @@ I did not spend it on realtime collaboration. A cursor overlay without a real me
 
 ## Storage
 
-SQLite via `better-sqlite3`, in `data/folio.db` locally and in `/data/folio.db` in the container. One file is enough for this scope, it needs no account, and it is still there after a refresh.
+MongoDB, through `MONGODB_URI`. Locally that comes from `.env`. On Vercel it is a project environment variable. The same database is what a refresh and a second visitor read.
 
-Tables:
+Collections:
 
 - `users` — three seeded people
 - `documents` — title, TipTap JSON, a plain-text preview, owner, last editor, timestamps

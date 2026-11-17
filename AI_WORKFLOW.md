@@ -4,7 +4,7 @@ I built Folio in Cursor with the coding agent. I used it as a pair programmer fo
 
 ## What the agent sped up
 
-- The SQLite schema, route handlers, and the TipTap toolbar wiring
+- The document storage, route handlers, and the TipTap toolbar wiring
 - The first pass of the library and editor layout
 - Test scaffolding for sharing, import, and the session cookie
 
@@ -17,7 +17,7 @@ I rejected a few things the tools would happily have generated:
 - **Live cursors or a CRDT.** They would have looked like collaboration and broken as soon as two people typed. The page tells the truth instead: the last save wins, and a stale save gets a 409 and a reload.
 - **A public link.** The brief asked for one person sharing with another. Shares are rows for seeded users, with owner, editor, and viewer spelled out.
 - **Saving uploaded HTML.** Imports are sanitized, mapped to a small set of nodes, and rejected if the TipTap schema cannot open them. I did not use server-side `generateJSON`, because that hides the formatting that actually survives and it wants a DOM.
-- **A serverless deploy.** SQLite on Vercel would forget documents. The app is a single Node process with a file on disk.
+- **A local database file on Vercel.** Documents live in MongoDB so a serverless instance can read the same notes after a cold start.
 - **A generic dashboard.** The home page is two lists, owned and shared, because that is the distinction the review needs to see.
 - **Plaintext demo passwords.** The password is public, and it is still stored as a scrypt hash.
 

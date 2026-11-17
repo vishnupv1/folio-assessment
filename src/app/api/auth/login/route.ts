@@ -15,7 +15,7 @@ export const POST = api(async (req) => {
     throw new HttpError(400, 'Enter your password')
   }
   const email = normalizeEmail(body.email)
-  const user = authenticate(getDb(), email, body.password)
+  const user = await authenticate(await getDb(), email, body.password)
   if (!user) throw new HttpError(401, "Those credentials don't match a Folio account.")
   const res = NextResponse.json({ user })
   const cookie = sessionCookie(signSession(user.id))

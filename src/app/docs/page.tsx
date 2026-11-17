@@ -9,6 +9,6 @@ export const metadata = { title: 'Documents · Folio' }
 
 export default async function DocsPage() {
   const user = await requireUser()
-  const data = listForUser(getDb(), user.id)
+  const data = await listForUser(await getDb(), user.id)
   return <LibraryScreen user={user} owned={data.owned} shared={data.shared} />
 }

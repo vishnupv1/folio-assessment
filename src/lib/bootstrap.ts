@@ -1,21 +1,32 @@
-import path from 'node:path'
-import { connect, type Db } from './db'
+import { connect, databaseName, type Db } from './db'
 import { seedDatabase } from './seed'
 
-const globalForDb = globalThis as unknown as { folioDb?: Db }
+const globalForDb = globalThis as unknown as { folioDb?: Db; folioOpening?: Promise<Db> }
 
-export function openDatabase(filename: string, options?: { demoDocument?: boolean }): Db {
-  const db = connect(filename)
-  seedDatabase(db, options)
+export async function openDatabase(options?: {
+  demoDocument?: boolean
+  uri?: string
+  name?: string
+}): Promise<Db> {
+  const uri = options?.uri || process.env.MONGODB_URI
+  if (!uri) throw new Error('Set MONGODB_URI')
+  const db = await connect(uri, options?.name || databaseName(uri))
+  await seedDatabase(db, options)
   return db
 }
 
-export function getDb(): Db {
-  if (!globalForDb.folioDb) {
-    const filename =
-      process.env.DATABASE_PATH ||
-      (process.env.VERCEL ? '/tmp/folio.db' : path.join(process.cwd(), 'data', 'folio.db'))
-    globalForDb.folioDb = openDatabase(filename)
+export function getDb(): Promise<Db> {
+  if (globalForDb.folioDb) return Promise.resolve(globalForDb.folioDb)
+  if (!globalForDb.folioOpening) {
+    globalForDb.folioOpening = openDatabase()
+      .then((db) => {
+        globalForDb.folioDb = db
+        return db
+      })
+      .catch((err) => {
+        globalForDb.folioOpening = undefined
+        throw err
+      })
   }
-  return globalForDb.folioDb
+  return globalForDb.folioOpening
 }

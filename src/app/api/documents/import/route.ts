@@ -17,6 +17,6 @@ export const POST = api(async (req) => {
   if (file.size === 0) throw new HttpError(400, 'That file is empty')
   if (file.size > MAX_UPLOAD_BYTES) throw new HttpError(413, 'That file is larger than 2 MB.')
   const bytes = Buffer.from(await file.arrayBuffer())
-  const created = await importUploadedFile(getDb(), user.id, { name: file.name, bytes })
+  const created = await importUploadedFile(await getDb(), user.id, { name: file.name, bytes })
   return Response.json({ id: created.id }, { status: 201 })
 })

@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import type { Db } from './db'
+import type { Db, DocumentDoc } from './db'
 import { assertEditorDocument } from './editor-extensions'
 import { HttpError } from './errors'
 import { canDelete, canEdit, canManageSharing } from './permissions'
@@ -19,34 +19,7 @@ import type {
 import { getUserByEmail, getUserById } from './users'
 import { normalizeEmail, parseContent, parseRole, parseTitle } from './validators'
 
-type DocumentRow = {
-  id: string
-  title: string
-  content_json: string
-  preview: string
-  owner_id: string
-  updated_by: string
-  created_at: string
-  updated_at: string
-}
-
-function requireDocument(db: Db, id: string): DocumentRow {
-  const row = db.prepare('SELECT * FROM documents WHERE id = ?').get(id) as DocumentRow | undefined
-  if (!row) throw new HttpError(404, 'Document not found')
-  return row
-}
-
-function roleFor(db: Db, doc: DocumentRow, userId: string): AccessRole {
-  if (doc.owner_id === userId) return 'owner'
-  const share = db.prepare('SELECT role FROM shares WHERE document_id = ? AND user_id = ?').get(doc.id, userId) as
-    | { role: ShareRole }
-    | undefined
-  if (!share) throw new HttpError(403, "You don't have access to this document")
-  return share.role
-}
-
-function requireUser(db: Db, id: string): PublicUser {
-  const user = getUserById(db, id)
+function requireUser(user: PublicUser | null): PublicUser {
   if (!user) throw new HttpError(500, 'This document could not be read')
   return user
 }
@@ -61,38 +34,46 @@ function readContent(raw: string): PMNode {
   }
 }
 
-export function rosterFor(db: Db, doc: DocumentRow): Roster {
-  const owner = requireUser(db, doc.owner_id)
-  const rows = db
-    .prepare(
-      `SELECT u.id AS id, u.email AS email, u.name AS name, s.role AS role
-       FROM shares s
-       JOIN users u ON u.id = s.user_id
-       WHERE s.document_id = ?
-       ORDER BY u.name COLLATE NOCASE`,
-    )
-    .all(doc.id) as { id: string; email: string; name: string; role: ShareRole }[]
-  return {
-    owner,
-    shares: rows.map((row) => ({
-      user: { id: row.id, email: row.email, name: row.name },
-      role: row.role,
-    })),
-  }
+async function requireDocument(db: Db, id: string): Promise<DocumentDoc> {
+  const row = await db.documents.findOne({ _id: id })
+  if (!row) throw new HttpError(404, 'Document not found')
+  return row
 }
 
-function toPayload(db: Db, doc: DocumentRow, access: AccessRole): EditorPayload {
+async function roleFor(db: Db, doc: DocumentDoc, userId: string): Promise<AccessRole> {
+  if (doc.owner_id === userId) return 'owner'
+  const share = await db.shares.findOne({ document_id: doc._id, user_id: userId })
+  if (!share) throw new HttpError(403, "You don't have access to this document")
+  return share.role
+}
+
+export async function rosterFor(db: Db, doc: DocumentDoc): Promise<Roster> {
+  const owner = requireUser(await getUserById(db, doc.owner_id))
+  const shareRows = await db.shares.find({ document_id: doc._id }).toArray()
+  const people = await db.users.find({ _id: { $in: shareRows.map((share) => share.user_id) } }).toArray()
+  const byId = new Map(people.map((person) => [person._id, person]))
+  const shares = shareRows
+    .flatMap((share) => {
+      const person = byId.get(share.user_id)
+      if (!person) return []
+      return [{ user: { id: person._id, email: person.email, name: person.name }, role: share.role }]
+    })
+    .sort((a, b) => a.user.name.localeCompare(b.user.name, undefined, { sensitivity: 'base' }))
+  return { owner, shares }
+}
+
+async function toPayload(db: Db, doc: DocumentDoc, access: AccessRole): Promise<EditorPayload> {
   return {
-    id: doc.id,
+    id: doc._id,
     title: doc.title,
     content: readContent(doc.content_json),
     preview: doc.preview,
     updatedAt: doc.updated_at,
     updatedLabel: formatUpdated(doc.updated_at),
     access,
-    owner: requireUser(db, doc.owner_id),
-    updatedBy: requireUser(db, doc.updated_by),
-    roster: rosterFor(db, doc),
+    owner: requireUser(await getUserById(db, doc.owner_id)),
+    updatedBy: requireUser(await getUserById(db, doc.updated_by)),
+    roster: await rosterFor(db, doc),
   }
 }
 
@@ -106,58 +87,50 @@ function listItem(row: { id: string; title: string; preview: string; updated_at:
   }
 }
 
-export function listForUser(db: Db, userId: string): DocumentLists {
-  const owned = db
-    .prepare(
-      `SELECT id, title, preview, updated_at
-       FROM documents
-       WHERE owner_id = ?
-       ORDER BY updated_at DESC`,
-    )
-    .all(userId) as { id: string; title: string; preview: string; updated_at: string }[]
-
-  const shared = db
-    .prepare(
-      `SELECT d.id, d.title, d.preview, d.updated_at, s.role, u.name AS owner_name
-       FROM shares s
-       JOIN documents d ON d.id = s.document_id
-       JOIN users u ON u.id = d.owner_id
-       WHERE s.user_id = ?
-       ORDER BY d.updated_at DESC`,
-    )
-    .all(userId) as {
-    id: string
-    title: string
-    preview: string
-    updated_at: string
-    role: ShareRole
-    owner_name: string
-  }[]
+export async function listForUser(db: Db, userId: string): Promise<DocumentLists> {
+  const owned = await db.documents.find({ owner_id: userId }).sort({ updated_at: -1 }).toArray()
+  const shareRows = await db.shares.find({ user_id: userId }).toArray()
+  const sharedDocs = await db.documents.find({ _id: { $in: shareRows.map((share) => share.document_id) } }).toArray()
+  const owners = await db.users.find({ _id: { $in: sharedDocs.map((doc) => doc.owner_id) } }).toArray()
+  const roleByDoc = new Map(shareRows.map((share) => [share.document_id, share.role]))
+  const ownerById = new Map(owners.map((owner) => [owner._id, owner.name]))
+  const shared = sharedDocs
+    .map((doc) => ({
+      id: doc._id,
+      title: doc.title,
+      preview: doc.preview,
+      updated_at: doc.updated_at,
+      role: roleByDoc.get(doc._id) ?? 'viewer',
+      owner_name: ownerById.get(doc.owner_id) ?? 'Unknown',
+    }))
+    .sort((a, b) => (a.updated_at < b.updated_at ? 1 : -1))
 
   return {
-    owned: owned.map(listItem),
+    owned: owned.map((doc) =>
+      listItem({ id: doc._id, title: doc.title, preview: doc.preview, updated_at: doc.updated_at }),
+    ),
     shared: shared.map(
       (row): SharedListItem => ({
         ...listItem(row),
-        role: row.role,
+        role: row.role as ShareRole,
         ownerName: row.owner_name,
       }),
     ),
   }
 }
 
-export function getAccessibleDocument(db: Db, documentId: string, userId: string): EditorPayload {
-  const doc = requireDocument(db, documentId)
-  const access = roleFor(db, doc, userId)
+export async function getAccessibleDocument(db: Db, documentId: string, userId: string): Promise<EditorPayload> {
+  const doc = await requireDocument(db, documentId)
+  const access = await roleFor(db, doc, userId)
   return toPayload(db, doc, access)
 }
 
-export function createDocument(
+export async function createDocument(
   db: Db,
   ownerId: string,
   input?: { title?: string; content?: PMNode },
-): { id: string } {
-  if (!getUserById(db, ownerId)) throw new HttpError(401, 'Sign in to continue')
+): Promise<{ id: string }> {
+  if (!(await getUserById(db, ownerId))) throw new HttpError(401, 'Sign in to continue')
   const title = input?.title ? parseTitle(input.title) : 'Untitled document'
   const content = input?.content ? parseContent(input.content) : emptyDocument()
   try {
@@ -168,21 +141,27 @@ export function createDocument(
   }
   const now = new Date().toISOString()
   const id = `doc_${randomUUID()}`
-  db.prepare(
-    `INSERT INTO documents (id, title, content_json, preview, owner_id, updated_by, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-  ).run(id, title, JSON.stringify(content), previewText(content), ownerId, ownerId, now, now)
+  await db.documents.insertOne({
+    _id: id,
+    title,
+    content_json: JSON.stringify(content),
+    preview: previewText(content),
+    owner_id: ownerId,
+    updated_by: ownerId,
+    created_at: now,
+    updated_at: now,
+  })
   return { id }
 }
 
-export function updateDocument(
+export async function updateDocument(
   db: Db,
   documentId: string,
   actorId: string,
   input: { title: unknown; content: unknown; baseUpdatedAt?: unknown },
-): SavedDocument {
-  const doc = requireDocument(db, documentId)
-  const access = roleFor(db, doc, actorId)
+): Promise<SavedDocument> {
+  const doc = await requireDocument(db, documentId)
+  const access = await roleFor(db, doc, actorId)
   if (!canEdit(access)) {
     throw new HttpError(403, "You have view access and can't edit this document.")
   }
@@ -195,13 +174,13 @@ export function updateDocument(
     throw new HttpError(400, 'Content must be a document the editor can open')
   }
   const contentJson = JSON.stringify(content)
-  const updatedBy = requireUser(db, actorId)
+  const updatedBy = requireUser(await getUserById(db, actorId))
   if (title === doc.title && contentJson === doc.content_json) {
     return {
-      id: doc.id,
+      id: doc._id,
       title: doc.title,
       updatedAt: doc.updated_at,
-      updatedBy: requireUser(db, doc.updated_by),
+      updatedBy: requireUser(await getUserById(db, doc.updated_by)),
       preview: doc.preview,
     }
   }
@@ -213,17 +192,19 @@ export function updateDocument(
   }
   const updatedAt = new Date().toISOString()
   const preview = previewText(content)
-  db.prepare(
-    `UPDATE documents
-     SET title = ?, content_json = ?, preview = ?, updated_by = ?, updated_at = ?
-     WHERE id = ?`,
-  ).run(title, contentJson, preview, actorId, updatedAt, doc.id)
-  return { id: doc.id, title, updatedAt, updatedBy, preview }
+  const result = await db.documents.updateOne(
+    { _id: doc._id, updated_at: doc.updated_at },
+    { $set: { title, content_json: contentJson, preview, updated_by: actorId, updated_at: updatedAt } },
+  )
+  if (result.matchedCount === 0) {
+    throw new HttpError(409, 'Someone else saved this document. Reload to continue.')
+  }
+  return { id: doc._id, title, updatedAt, updatedBy, preview }
 }
 
-export function deleteDocument(db: Db, documentId: string, actorId: string): void {
-  const doc = requireDocument(db, documentId)
-  const access = roleFor(db, doc, actorId)
+export async function deleteDocument(db: Db, documentId: string, actorId: string): Promise<void> {
+  const doc = await requireDocument(db, documentId)
+  const access = await roleFor(db, doc, actorId)
   if (!canDelete(access)) {
     throw new HttpError(
       403,
@@ -232,23 +213,24 @@ export function deleteDocument(db: Db, documentId: string, actorId: string): voi
         : 'Only the owner can delete this document.',
     )
   }
-  db.prepare('DELETE FROM documents WHERE id = ?').run(doc.id)
+  await db.shares.deleteMany({ document_id: doc._id })
+  await db.documents.deleteOne({ _id: doc._id })
 }
 
-export function grantShare(
+export async function grantShare(
   db: Db,
   documentId: string,
   actorId: string,
   input: { email: unknown; role: unknown },
-): Roster {
-  const doc = requireDocument(db, documentId)
-  const access = roleFor(db, doc, actorId)
+): Promise<Roster> {
+  const doc = await requireDocument(db, documentId)
+  const access = await roleFor(db, doc, actorId)
   if (!canManageSharing(access)) {
     throw new HttpError(403, 'Only the owner can change sharing')
   }
   const email = normalizeEmail(input.email)
   const shareRole = parseRole(input.role)
-  const target = getUserByEmail(db, email)
+  const target = await getUserByEmail(db, email)
   if (!target) {
     throw new HttpError(
       404,
@@ -258,24 +240,22 @@ export function grantShare(
   if (target.id === doc.owner_id) {
     throw new HttpError(400, `${target.name} already owns this document.`)
   }
-  const existing = db
-    .prepare('SELECT role FROM shares WHERE document_id = ? AND user_id = ?')
-    .get(doc.id, target.id) as { role: ShareRole } | undefined
+  const existing = await db.shares.findOne({ document_id: doc._id, user_id: target.id })
   if (!existing) {
-    const count = db.prepare('SELECT COUNT(*) AS n FROM shares WHERE document_id = ?').get(doc.id) as { n: number }
-    if (count.n >= 20) throw new HttpError(400, 'This document is already shared with 20 people')
+    const count = await db.shares.countDocuments({ document_id: doc._id })
+    if (count >= 20) throw new HttpError(400, 'This document is already shared with 20 people')
   }
-  db.prepare(
-    `INSERT INTO shares (document_id, user_id, role, created_at)
-     VALUES (?, ?, ?, ?)
-     ON CONFLICT(document_id, user_id) DO UPDATE SET role = excluded.role`,
-  ).run(doc.id, target.id, shareRole, new Date().toISOString())
+  await db.shares.updateOne(
+    { document_id: doc._id, user_id: target.id },
+    { $set: { role: shareRole }, $setOnInsert: { created_at: new Date().toISOString() } },
+    { upsert: true },
+  )
   return rosterFor(db, doc)
 }
 
-export function revokeShare(db: Db, documentId: string, actorId: string, targetUserId: string): Roster {
-  const doc = requireDocument(db, documentId)
-  const access = roleFor(db, doc, actorId)
+export async function revokeShare(db: Db, documentId: string, actorId: string, targetUserId: string): Promise<Roster> {
+  const doc = await requireDocument(db, documentId)
+  const access = await roleFor(db, doc, actorId)
   if (!canManageSharing(access)) {
     throw new HttpError(403, 'Only the owner can change sharing')
   }
@@ -283,7 +263,7 @@ export function revokeShare(db: Db, documentId: string, actorId: string, targetU
   if (targetUserId === doc.owner_id) {
     throw new HttpError(400, "The owner's access can't be removed.")
   }
-  const result = db.prepare('DELETE FROM shares WHERE document_id = ? AND user_id = ?').run(doc.id, targetUserId)
-  if (result.changes === 0) throw new HttpError(404, 'That person does not have a share to remove')
+  const result = await db.shares.deleteOne({ document_id: doc._id, user_id: targetUserId })
+  if (result.deletedCount === 0) throw new HttpError(404, 'That person does not have a share to remove')
   return rosterFor(db, doc)
 }

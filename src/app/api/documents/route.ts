@@ -8,11 +8,11 @@ export const dynamic = 'force-dynamic'
 
 export const GET = api(async () => {
   const user = await requireApiUser()
-  return Response.json(listForUser(getDb(), user.id))
+  return Response.json(await listForUser(await getDb(), user.id))
 })
 
 export const POST = api(async () => {
   const user = await requireApiUser()
-  const created = createDocument(getDb(), user.id)
+  const created = await createDocument(await getDb(), user.id)
   return Response.json({ id: created.id }, { status: 201 })
 })

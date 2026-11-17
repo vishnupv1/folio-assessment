@@ -11,7 +11,7 @@ export default async function EditorPage({ params }: { params: Promise<{ id: str
   const user = await requireUser()
   const { id } = await params
   try {
-    const doc = getAccessibleDocument(getDb(), id, user.id)
+    const doc = await getAccessibleDocument(await getDb(), id, user.id)
     return <EditorShell key={doc.id} currentUser={user} doc={doc} />
   } catch (err) {
     if (isHttpError(err) && err.status === 403) {

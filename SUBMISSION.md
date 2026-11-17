@@ -40,7 +40,7 @@ No screenshots. Local setup is `npm install` and `npm run dev`. Nothing else is 
 - Import .txt, .md, and .docx into a new document
 - Export Markdown
 - Owner, editor, and viewer sharing, with separate owned and shared lists
-- Data kept in SQLite across refresh and restart
+- Data kept in MongoDB across refresh and restart
 - Tests for access, import, and the session cookie
 
 ## Incomplete

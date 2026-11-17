@@ -1,13 +1,6 @@
-import type { Db } from './db'
+import type { Db, UserDoc } from './db'
 import { hashPassword, verifyPassword } from './passwords'
 import type { PublicUser } from './types'
-
-type UserRow = {
-  id: string
-  email: string
-  name: string
-  password_hash: string
-}
 
 let dummyHash: string | null = null
 
@@ -16,22 +9,24 @@ function dummyPasswordHash(): string {
   return dummyHash
 }
 
-export function getUserById(db: Db, id: string): PublicUser | null {
-  const row = db.prepare('SELECT id, email, name FROM users WHERE id = ?').get(id) as PublicUser | undefined
-  return row ?? null
+function publicUser(row: UserDoc): PublicUser {
+  return { id: row._id, email: row.email, name: row.name }
 }
 
-export function getUserByEmail(db: Db, email: string): PublicUser | null {
-  const row = db.prepare('SELECT id, email, name FROM users WHERE email = ?').get(email) as PublicUser | undefined
-  return row ?? null
+export async function getUserById(db: Db, id: string): Promise<PublicUser | null> {
+  const row = await db.users.findOne({ _id: id }, { projection: { password_hash: 0 } })
+  return row ? publicUser(row as UserDoc) : null
 }
 
-export function authenticate(db: Db, email: string, password: string): PublicUser | null {
+export async function getUserByEmail(db: Db, email: string): Promise<PublicUser | null> {
+  const row = await db.users.findOne({ email }, { projection: { password_hash: 0 } })
+  return row ? publicUser(row as UserDoc) : null
+}
+
+export async function authenticate(db: Db, email: string, password: string): Promise<PublicUser | null> {
   const normalized = email.trim().toLowerCase()
-  const row = db.prepare('SELECT id, email, name, password_hash FROM users WHERE email = ?').get(normalized) as
-    | UserRow
-    | undefined
+  const row = await db.users.findOne({ email: normalized })
   const ok = verifyPassword(password, row?.password_hash ?? dummyPasswordHash())
   if (!row || !ok) return null
-  return { id: row.id, email: row.email, name: row.name }
+  return publicUser(row)
 }

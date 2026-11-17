@@ -4,13 +4,9 @@ services:
     runtime: docker
     plan: starter
     healthCheckPath: /api/health
-    disk:
-      name: folio-data
-      mountPath: /data
-      sizeGB: 1
     envVars:
-      - key: DATABASE_PATH
-        value: /data/folio.db
+      - key: MONGODB_URI
+        sync: false
       - key: COOKIE_SECURE
         value: "true"
       - key: SESSION_SECRET

@@ -12,7 +12,7 @@ export async function getCurrentUser(): Promise<PublicUser | null> {
   const token = jar.get(COOKIE_NAME)?.value
   const userId = readSession(token)
   if (!userId) return null
-  return getUserById(getDb(), userId)
+  return getUserById(await getDb(), userId)
 }
 
 export async function requireUser(): Promise<PublicUser> {

@@ -11,7 +11,7 @@ export const POST = api(async (req, ctx) => {
   const user = await requireApiUser()
   const id = await routeId(ctx)
   const body = await readJson(req)
-  const roster = grantShare(getDb(), id, user.id, { email: body.email, role: body.role })
+  const roster = await grantShare(await getDb(), id, user.id, { email: body.email, role: body.role })
   return Response.json({ roster })
 })
 
@@ -20,6 +20,6 @@ export const DELETE = api(async (req, ctx) => {
   const id = await routeId(ctx)
   const userId = new URL(req.url).searchParams.get('userId')
   if (!userId) throw new HttpError(400, 'Choose a person to remove')
-  const roster = revokeShare(getDb(), id, user.id, userId)
+  const roster = await revokeShare(await getDb(), id, user.id, userId)
   return Response.json({ roster })
 })
