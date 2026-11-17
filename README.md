@@ -81,20 +81,7 @@ The tests cover the sharing rules, a stale save, import of Markdown and Word, an
 
 ## Deploy
 
-Folio stores documents in MongoDB. Set `MONGODB_URI` in `.env` locally and in the Vercel project settings. The same database is what the live site reads.
-
-Local Docker:
-
-```bash
-docker build -t folio .
-docker run --rm -p 3000:3000 \
-  -e SESSION_SECRET=replace-with-at-least-16-characters \
-  -e COOKIE_SECURE=false \
-  -e MONGODB_URI \
-  folio
-```
-
-Pass your real `MONGODB_URI` into that command. Use `COOKIE_SECURE=true` only when the public URL is HTTPS. `render.yaml` is a starting point for a Render web service; set `MONGODB_URI` there too.
+Folio stores documents in MongoDB. Set `MONGODB_URI` in `.env` locally and in the Vercel project settings. The same database is what the live site reads. Use `COOKIE_SECURE=true` only when the public URL is HTTPS.
 
 For a local production build over HTTP:
 

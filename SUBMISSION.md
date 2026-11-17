@@ -4,7 +4,7 @@ Folio, a shared document editor for the Ajaia assignment.
 
 ## Live product
 
-Live URL: not deployed from this machine. No host login was available. Deploy with the Docker or Render steps in README.md. The app needs a persistent disk. Do not put it on a serverless host.
+Live URL: the Vercel project. Set `MONGODB_URI` in that project's environment. Documents are stored in MongoDB.
 
 ## Walkthrough
 
@@ -29,7 +29,6 @@ Password for every account: `folio-demo`
 - WALKTHROUGH_URL.txt — video URL slot
 - samples/weekly-update.md, samples/plain-notes.txt, samples/weekly-update.docx
 - Automated tests in tests/
-- Dockerfile and render.yaml
 
 No screenshots. Local setup is `npm install` and `npm run dev`. Nothing else is required.
 

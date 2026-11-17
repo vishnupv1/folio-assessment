@@ -76,5 +76,4 @@ Export walks the same JSON back out to Markdown. It is a convenience, not a loss
 - Two editors can still lose a paragraph if they type at the same time. The 409 check stops a blind overwrite. It does not merge.
 - There is no history beyond the current document.
 - The share dialog is not a full focus trap.
-- The container image is for a review deploy, not a hardened production image.
 - Import size is capped at 2 MB and document JSON at 400k characters. That is a guardrail, not an abuse story for the public internet.
