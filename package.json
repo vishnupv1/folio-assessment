@@ -4,7 +4,7 @@
   "private": true,
   "description": "Folio is a lightweight shared document editor for the Ajaia team.",
   "engines": {
-    "node": ">=20"
+    "node": "22.x"
   },
   "scripts": {
     "dev": "next dev",
